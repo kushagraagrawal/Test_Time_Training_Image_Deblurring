@@ -32,12 +32,16 @@ class PascalVOCLoader(Dataset):
 
         if(self.transforms):
             sample['image'] = self.transforms(sample['image'])
+            sample['inputImg'] = self.transforms(sample['inputImg'])
         return sample
 
-def getPascalLoader(inputFileName: str, batch_size: int, shuffle: bool) -> DataLoader:
+def getPascalLoader(inputFileName: str, batch_size: int, shuffle: bool, inputTransform) -> DataLoader:
     df = pd.read_csv(inputFileName)
-    dataset = PascalVOCLoader(df, transform=transform)
+    dataset = PascalVOCLoader(df, transform=inputTransform)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 if(__name__=='__main__'):
-    dl = getPascalLoader('pascalvoc.csv', 16, True)
+    dl = getPascalLoader('pascalvoc.csv', 16, True, transform)
+    data = next(iter(dl))
+    print(f"Feature batch shape: {data['image'].size()}")
+    print(f"Labels batch shape: {data['class'].size()}")

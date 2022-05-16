@@ -40,52 +40,52 @@ class CocoDataset(Dataset):
     def __init__(self, rootDir: str, annFile: str, transform = None) -> None:
         super(CocoDataset, self).__init__()
         self.coco = COCO(annFile)
-        # self.ids = list(sorted(self.coco.imgs.keys()))
         self.ids = list()
         for _, val in category_dict.items():
             img_ids = self.coco.getImgIds(catIds=[val])
             self.ids.extend(img_ids)
-        self.ids = list(sorted(self.ids))
+        self.ids = list(set(sorted(self.ids)))
+        # print(len(self.ids))
         self.root = rootDir
         self.transform = transform
 
     def __len__(self) -> int:
         return len(self.ids)
 
-    def _load_image(self, id: int) -> Image.Image:
-        path = self.coco.loadImgs(id)[0]["file_name"]
-        print(path)
+    def _load_image(self, ids: int) -> Image.Image:
+        path = self.coco.loadImgs(ids)[0]["file_name"]
         return Image.open(os.path.join(self.root, path)).convert("RGB")
 
-    def _load_target(self, id: int):
-        target = self.coco.loadAnns(self.coco.getAnnIds(id))
+    def _load_target(self, ids: int):
+        target = self.coco.loadAnns(self.coco.getAnnIds(ids))
         target_classes = defaultdict()
         # not sure on this
-        # print(target)
         for i in range(len(target)):
-            if(target[i]['category_id'] in target_classes.keys()):
-                target_classes[target[i]['category_id']] += 1
-            else:
-                target_classes[target[i]['category_id']] = 1
+            if(target[i]['category_id'] in category_dict.values()):
+                if(target[i]['category_id'] in target_classes.keys()):
+                    target_classes[target[i]['category_id']] += 1
+                else:
+                    target_classes[target[i]['category_id']] = 1
         
         max_val = -np.inf
         max_category = 0
         for key, val in target_classes.items():
             if val > max_val:
                 max_category = key
+                max_val = val
         return max_category
 
     def __getitem__(self, index: int):
-        id = self.ids[index]
-        image = self._load_image(id)
+        ids = self.ids[index]
+        image = self._load_image(ids)
         blurredImage = self.getBlurredOutput(image)
-        target = self._load_target(id)
+        target = self._load_target(ids)
 
         if(self.transform is not None):
             image = self.transform(image)
             blurredImage = self.transform(blurredImage)
 
-        return {'inputImg': image, 'blurredImage': blurredImage, 'class': target}
+        return {'image': image, 'inputImg': blurredImage, 'class': target}
 
 if(__name__ == '__main__'):
     cocoData = CocoDataset('../../train2014', '../../annotations/instances_train2014.json', transform=transform)
