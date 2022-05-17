@@ -12,3 +12,7 @@ Project for ECE 285
 
 ## Useful References
 - Coco API - https://github.com/cocodataset/cocoapi
+
+## Notes
+05/17/2022
+- In CocoLoader, tried picking training images with just 1 annotation (commented out code in `cocoLoader.py`), resulted in only 3745 images.
