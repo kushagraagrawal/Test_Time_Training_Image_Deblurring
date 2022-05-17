@@ -94,7 +94,7 @@ class CocoDataset(Dataset):
         return {'image': image, 'inputImg': blurredImage, 'class': target}
 
 if(__name__ == '__main__'):
-    cocoData = CocoDataset('../../train2014', '../../annotations/instances_train2014.json', transform=transform)
+    cocoData = CocoDataset('train2014', 'annotations/instances_train2014.json', transform=transform)
     dl = DataLoader(cocoData, batch_size=2, shuffle=True)
     for step, (data) in enumerate(dl):
         a = step
