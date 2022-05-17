@@ -43,9 +43,14 @@ class CocoDataset(Dataset):
         self.ids = list()
         for _, val in category_dict.items():
             img_ids = self.coco.getImgIds(catIds=[val])
+#             requiredID = list()
+#             for ids in img_ids:
+#                 anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=[ids], iscrowd=None))
+#                 if(len(anns) == 1):
+#                     requiredID.append(ids)
             self.ids.extend(img_ids)
         self.ids = list(set(sorted(self.ids)))
-        # print(len(self.ids))
+        print(len(self.ids))
         self.root = rootDir
         self.transform = transform
 
@@ -60,6 +65,7 @@ class CocoDataset(Dataset):
         target = self.coco.loadAnns(self.coco.getAnnIds(ids))
         target_classes = defaultdict()
         # not sure on this
+        # print(len(target))
         for i in range(len(target)):
             if(target[i]['category_id'] in category_dict.values()):
                 if(target[i]['category_id'] in target_classes.keys()):
