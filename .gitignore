@@ -1,0 +1,8 @@
+annotations/
+annotations 2/
+train2014/
+val2014/
+VOCdevkit/
+.DS_Store
+.ipynb_checkpoints/
+__pycache__/
