@@ -35,6 +35,28 @@ category_dict = {'person': 1,
                  'couch': 63,
                  'tv': 72}
 
+temp_dict = {1: 0,
+             2: 1,
+             3: 2,
+             4: 3,
+             5: 4,
+             6: 5,
+             7: 6,
+             8: 7,
+             9: 8,
+             16: 9,
+             44: 10,
+             17: 11,
+             62: 12,
+             21: 13,
+             67: 14,
+             18: 15,
+             19: 16,
+             64: 17,
+             20: 18,
+             63: 19,
+             72: 20}
+
 class CocoDataset(Dataset):
     
     def __init__(self, rootDir: str, annFile: str, transform = None) -> None:
@@ -50,7 +72,6 @@ class CocoDataset(Dataset):
 #                     requiredID.append(ids)
             self.ids.extend(img_ids)
         self.ids = list(set(sorted(self.ids)))
-        print(len(self.ids))
         self.root = rootDir
         self.transform = transform
         self.blur_transform = transforms.Compose([transforms.ToTensor(),transforms.Resize((256, 256))])
@@ -133,7 +154,7 @@ class CocoDataset(Dataset):
             if val > max_val:
                 max_category = key
                 max_val = val
-        return max_category
+        return temp_dict[max_category]
 
     def __getitem__(self, index: int):
         ids = self.ids[index]
