@@ -65,13 +65,25 @@ class CocoDataset(Dataset):
         self.ids = list()
         for _, val in category_dict.items():
             img_ids = self.coco.getImgIds(catIds=[val])
-#             requiredID = list()
-#             for ids in img_ids:
-#                 anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=[ids], iscrowd=None))
-#                 if(len(anns) == 1):
-#                     requiredID.append(ids)
-            self.ids.extend(img_ids)
+            requiredID = list()
+            for ids in img_ids:
+                anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=[ids], iscrowd=None))
+                target_classes = defaultdict()
+                for i in range(len(anns)):
+                    if(anns[i]['category_id'] in category_dict.values()):
+                        if(anns[i]['category_id'] in target_classes.keys()):
+                            target_classes[anns[i]['category_id']] += 1
+                        else:
+                            target_classes[anns[i]['category_id']] = 1
+                    else:
+                        target_classes = defaultdict()
+                        break
+                if(len(target_classes.keys()) == 1):
+                    requiredID.append(ids)
+            self.ids.extend(requiredID)
+            
         self.ids = list(set(sorted(self.ids)))
+        print(len(self.ids))
         self.root = rootDir
         self.transform = transform
         self.blur_transform = transforms.Compose([transforms.ToTensor(),transforms.Resize((256, 256))])
@@ -137,24 +149,29 @@ class CocoDataset(Dataset):
         return Image.open(os.path.join(self.root, path)).convert("RGB"),path
 
     def _load_target(self, ids: int):
-        target = self.coco.loadAnns(self.coco.getAnnIds(ids))
-        target_classes = defaultdict()
-        # not sure on this
-        # print(len(target))
-        for i in range(len(target)):
-            if(target[i]['category_id'] in category_dict.values()):
-                if(target[i]['category_id'] in target_classes.keys()):
-                    target_classes[target[i]['category_id']] += 1
-                else:
-                    target_classes[target[i]['category_id']] = 1
-        
-        max_val = -np.inf
-        max_category = 0
-        for key, val in target_classes.items():
-            if val > max_val:
-                max_category = key
-                max_val = val
-        return temp_dict[max_category]
+        target = self.coco.loadAnns(self.coco.getAnnIds(ids, iscrowd=None))
+#         for i in range(len(target)):
+#             print(target[i]['category_id'])
+#         print('********')
+        return target[0]['category_id']
+#         target_classes = defaultdict()
+#         # not sure on this
+#         for i in range(len(target)):
+#             print(target[i]['category_id'], target[i]['iscrowd'])
+#             if(target[i]['category_id'] in category_dict.values()):
+#                 if(target[i]['category_id'] in target_classes.keys()):
+#                     target_classes[target[i]['category_id']] += 1
+#                 else:
+#                     target_classes[target[i]['category_id']] = 1
+#         print('**********')
+#         max_val = -np.inf
+#         max_category = 0
+#         # print(target_classes)
+#         for key, val in target_classes.items():
+#             if val > max_val:
+#                 max_category = key
+#                 max_val = val
+#         return max_category
 
     def __getitem__(self, index: int):
         ids = self.ids[index]
