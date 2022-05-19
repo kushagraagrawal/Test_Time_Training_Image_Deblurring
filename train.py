@@ -47,6 +47,10 @@ encoder = Unet_encoder(in_channels=3)
 decoder = Unet_decoder()
 classifier = Classifier()
 
+encoder = encoder.to(device)
+decoder = decoder.to(device)
+classifier = classifier.to(device)
+
 # ============= optimizer, loss func =============
 params = list(encoder.parameters()) + list(decoder.parameters()) + list(classifier.parameters())
 optimizer = optim.Adam(params, lr=args.initLR)
