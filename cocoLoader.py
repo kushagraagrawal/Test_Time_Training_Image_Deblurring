@@ -153,7 +153,7 @@ class CocoDataset(Dataset):
 #         for i in range(len(target)):
 #             print(target[i]['category_id'])
 #         print('********')
-        return target[0]['category_id']
+        return temp_dict[target[0]['category_id']]
 #         target_classes = defaultdict()
 #         # not sure on this
 #         for i in range(len(target)):

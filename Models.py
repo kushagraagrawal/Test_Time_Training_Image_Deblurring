@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class SameConv(nn.Module):
     def __init__(self, in_channels, out_channels):
-        super().__init__()
+        super(SameConv, self).__init__()
 
         self.conv = nn.Conv2d(in_channels, out_channels,3,padding=1)
         self.bn = nn.BatchNorm2d(out_channels)
@@ -16,7 +16,7 @@ class SameConv(nn.Module):
 class DownSampleConv(nn.Module):
 
     def __init__(self, in_channels, out_channels):
-        super().__init__()
+        super(DownSampleConv, self).__init__()
 
         self.conv = nn.Conv2d(in_channels, out_channels,3,padding=1,stride=2)
         self.bn = nn.BatchNorm2d(out_channels)
@@ -30,7 +30,7 @@ class DownSampleConv(nn.Module):
 class UpSampleConv(nn.Module):
 
     def __init__(self,in_channels,out_channels):
-        super().__init__()
+        super(UpSampleConv, self).__init__()
 
         self.deconv = nn.ConvTranspose2d(in_channels, out_channels,3,padding=1,stride=2,output_padding=1)
         self.bn = nn.BatchNorm2d(out_channels)
@@ -43,23 +43,23 @@ class UpSampleConv(nn.Module):
 class Unet_encoder(nn.Module):
 
     def __init__(self, in_channels):
-        super().__init__()
+        super(Unet_encoder, self).__init__()
 
         #encoder downsample convs
-        self.encoders_downsample = [
+        self.encoders_downsample = nn.ModuleList([
             DownSampleConv(64, 128),  # bs x 128 x H/2 x W/2
             DownSampleConv(128, 256),  # bs x 256 x H/4 x W/4
             DownSampleConv(256, 512),  # bs x 512 x H/8 x W/8
             DownSampleConv(512, 1024),  # bs x 512 x H/16 x W/16
-        ]
+        ])
         
         #encoder same convs
-        self.encoders_same = [
+        self.encoders_same = nn.ModuleList([
             SameConv(in_channels, 64),  # bs x 64 x H x W
             SameConv(128, 128),  # bs x 128 x H/2 x W/2
             SameConv(256, 256),  # bs x 256 x H/4 x W/4
             SameConv(512, 512),  # bs x 512 x H/8 x W/8
-        ]
+        ])
 
     def forward(self, x):
         skips_cons = []
@@ -74,23 +74,23 @@ class Unet_encoder(nn.Module):
 class Unet_decoder(nn.Module):
 
     def __init__(self,out_channels=3):
-        super().__init__()
+        super(Unet_decoder, self).__init__()
 
         #decoder downsample convs
-        self.decoders_upsample = [
+        self.decoders_upsample = nn.ModuleList([
             UpSampleConv(1024, 512),  # bs x 1024 x H/8 x W/8
             UpSampleConv(512, 256),  # bs x 256 x H/4 x W/4
             UpSampleConv(256, 128),  # bs x 128 x H/2 x W/2
             UpSampleConv(128, 64),  # bs x 64 x H x W
-        ]
+        ])
         
         #decoder same convs
-        self.decoder_same = [
+        self.decoder_same = nn.ModuleList([
             SameConv(1024,512),  # bs x 512 x H/8 x W/8
             SameConv(512,256),  # bs x 256 x H/4 x W/4
             SameConv(256,128),  # bs x 128 x H/2 x W/2
             SameConv(128,64),  # bs x 64 x H x W
-        ]
+        ])
 
         self.final_conv = nn.Conv2d(64,out_channels,3,padding=1)
         
@@ -105,7 +105,7 @@ class Unet_decoder(nn.Module):
 class Classifier(nn.Module):
 
     def __init__(self):
-        super().__init__()
+        super(Classifier, self).__init__()
 
         self.conv1 = nn.Conv2d(1024,2048,3,stride=2,padding=1)
         self.bn1 = nn.BatchNorm2d(2048)

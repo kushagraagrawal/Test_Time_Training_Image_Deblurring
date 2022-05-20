@@ -5,4 +5,5 @@ val2014/
 VOCdevkit/
 .DS_Store
 .ipynb_checkpoints/
+train_result/
 __pycache__/

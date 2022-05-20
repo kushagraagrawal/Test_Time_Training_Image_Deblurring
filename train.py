@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from Models import Unet_encoder, Unet_decoder, Classifier
 import numpy as np
+import os
 
 # ============= argparser =============
 parser = argparse.ArgumentParser(description='training Params')
@@ -18,10 +19,14 @@ parser.add_argument('--valImageRoot', default='./val2014', help='location of the
 parser.add_argument('--valLabelRoot', default='./annotations/instances_val2014.json', help='location of the val labels', type=str)
 parser.add_argument('--pascalCSV', default='pascalvoc.csv', help='location of pascal voc annotations', type=str)
 parser.add_argument('--initLR', default=1e-4, help='initial Learning Rate', type=float)
-parser.add_argument('--batchSize', default=16, help='batch size', type=int)
+parser.add_argument('--trainBatchSize', default=16, help='train batch size', type=int)
+parser.add_argument('--valBatchSize', default=8, help='val batch size', type=int)
 parser.add_argument('--nEpoch', default=10, help='epochs', type=int)
+parser.add_argument('--experiment', default='train_result', help='result dir', type=str)
 
 args = parser.parse_args()
+
+os.system('mkdir %s'%(args.experiment))
 
 # ============= torch cuda =============
 if torch.cuda.is_available():
@@ -35,21 +40,17 @@ datasetTransform = transforms.Compose([
         transforms.ToTensor()
     ])
 
-pascalLoader = getPascalLoader(args.pascalCSV, args.batchSize, shuffle=True, inputTransform=datasetTransform)
+pascalLoader = getPascalLoader(args.pascalCSV, args.trainBatchSize, shuffle=True, inputTransform=datasetTransform)
 cocoDataset = CocoDataset(args.imageRoot, args.trainLabelRoot, transform=datasetTransform)
-trainCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.batchSize, shuffle=True)
+trainCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.trainBatchSize, shuffle=True)
 
 cocoDataset = CocoDataset(args.valImageRoot, args.valLabelRoot, transform=datasetTransform)
-valCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.batchSize, shuffle=True)
+valCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.valBatchSize, shuffle=True)
 
 # ============= model =============
-encoder = Unet_encoder(in_channels=3)
-decoder = Unet_decoder()
-classifier = Classifier()
-
-encoder = encoder.to(device)
-decoder = decoder.to(device)
-classifier = classifier.to(device)
+encoder = Unet_encoder(in_channels=3).to(device)
+decoder = Unet_decoder().to(device)
+classifier = Classifier().to(device)
 
 # ============= optimizer, loss func =============
 params = list(encoder.parameters()) + list(decoder.parameters()) + list(classifier.parameters())
@@ -114,12 +115,12 @@ for e in range(args.nEpoch):
         print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f'%(e, valIter, loss, loss_classification))
         if(loss < best_val_loss):
             best_val_loss = loss
-            torch.save(encoder.state_dict(), 'encoder.pth')
-            torch.save(decoder.state_dict(), 'decoder.pth')
-            torch.save(classifier.state_dict(), 'classifier.pth')
+            torch.save(encoder.state_dict(), args.experiment + '/encoder.pth')
+            torch.save(decoder.state_dict(), args.experiment + '/decoder.pth')
+            torch.save(classifier.state_dict(), args.experiment + '/classifier.pth')
     
     train_loss_epoch.append(train_loss)
     val_loss_epoch.append(val_loss)
 
-np.save('train_loss.npy', train_loss_epoch)
-np.save('val_loss.npy', val_loss_epoch)
+np.save(args.experiment + '/train_loss.npy', train_loss_epoch)
+np.save(args.experiment + '/val_loss.npy', val_loss_epoch)
