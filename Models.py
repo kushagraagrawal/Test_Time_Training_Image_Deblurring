@@ -117,7 +117,7 @@ class Classifier(nn.Module):
         self.bn3 = nn.BatchNorm2d(1000)
         
         self.global_pool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(1000,21) # 21 classes
+        self.fc = nn.Linear(1000,20) # 21 classes
         
         self.relu = nn.ReLU()
         

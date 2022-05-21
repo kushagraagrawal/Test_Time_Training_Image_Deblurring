@@ -23,6 +23,7 @@ parser.add_argument('--trainBatchSize', default=16, help='train batch size', typ
 parser.add_argument('--valBatchSize', default=8, help='val batch size', type=int)
 parser.add_argument('--nEpoch', default=10, help='epochs', type=int)
 parser.add_argument('--experiment', default='train_result', help='result dir', type=str)
+parser.add_argument('--checkpoint', default=None, help='restore training from checkpoint', type=str)
 
 args = parser.parse_args()
 
@@ -31,6 +32,7 @@ os.system('mkdir %s'%(args.experiment))
 # ============= torch cuda =============
 if torch.cuda.is_available():
     device = 'cuda'
+    torch.cuda.empty_cache()
 else:
     device = 'cpu'
 
@@ -61,15 +63,29 @@ criterionClassification = nn.CrossEntropyLoss()
 # ============= training/val loop =============
 trainIter = 0
 valIter = 0
-best_val_loss = -np.inf
+best_train_loss = np.inf
+best_val_loss = np.inf
 train_loss_epoch = []
 val_loss_epoch = []
-for e in range(args.nEpoch):
+e = 0
+
+if(args.checkpoint is not None):
+    checkpoint = torch.load(args.checkpoint)
+    encoder.load_state_dict(checkpoint['encoder'])
+    decoder.load_state_dict(checkpoint['decoder'])
+    classifier.load_state_dict(checkpoint['classifier'])
+    e = checkpoint['epoch']
+    best_train_loss = checkpoint['loss']
+
+while e < args.nEpoch:
     encoder.train()
     decoder.train()
     classifier.train()
-    train_loss = []
-    val_loss = []
+    train_loss = 0
+    val_loss = 0
+    
+    correct = 0
+    total = 0
     # train loop
     for step, (data) in enumerate(trainCocoDL):
         trainIter += 1
@@ -84,41 +100,61 @@ for e in range(args.nEpoch):
         predictions = classifier(x)
         loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
         loss_final = loss + loss_classification
+        _, predict = predictions.max(1)
+        total += classImg.size(0)
+        correct += (predict==classImg).float().sum().item()
+        accuracy = correct / total
         # loss += loss_classification
 
-        train_loss.append(loss_final)
+        train_loss += loss_final
 
         loss_final.backward()
         optimizer.step()
 
-        print('Train - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f'%(e, trainIter, loss, loss_classification))
+        print('Train - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, trainIter, loss, loss_classification, accuracy))
+    
+    train_loss_epoch.append(train_loss)
+    if(train_loss < best_train_loss):
+        print('************ saving checkpoint at epoch: %d ************'%(e))
+        best_train_loss = train_loss
+        PATH = args.experiment + '/checkpoint.ckpt'
+        torch.save({
+                   'encoder': encoder.state_dict(),
+                   'decoder': decoder.state_dict(),
+                   'classifier': classifier.state_dict(),
+                   'epoch': e,
+                   'loss': best_train_loss
+                   }, PATH)
 
     # val loop
-    encoder.eval()
-    decoder.eval()
-    classifier.eval()
-    for step, (data) in enumerate(valCocoDL):
-        valIter += 1
-        gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
+    if((e+1) % 4 == 0):
+        encoder.eval()
+        decoder.eval()
+        classifier.eval()
+        for step, (data) in enumerate(valCocoDL):
+            valIter += 1
+            gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
 
-        x, skip_connections = encoder(blurImg)
-        output1 = decoder(x, skip_connections)
-        loss = criterionDeblur(output1, gtImg)
+            x, skip_connections = encoder(blurImg)
+            output1 = decoder(x, skip_connections)
+            loss = criterionDeblur(output1, gtImg)
 
-        # ===== self-supervised task =====
-        predictions = classifier(x)
-        loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
-        loss_final = loss + loss_classification
+            # ===== self-supervised task =====
+            predictions = classifier(x)
+            loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
+            loss_final = loss + loss_classification
 
-        val_loss.append(loss_final)
+            val_loss += loss_final
 
-        print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f'%(e, valIter, loss, loss_classification))
-        if(loss < best_val_loss):
+            print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f'%(e, valIter, loss, loss_classification))
+        val_loss_epoch.append(val_loss)
+        if(val_loss < best_val_loss):
             best_val_loss = loss
             torch.save(encoder.state_dict(), args.experiment + '/encoder.pth')
             torch.save(decoder.state_dict(), args.experiment + '/decoder.pth')
             torch.save(classifier.state_dict(), args.experiment + '/classifier.pth')
     
+    e += 1
     train_loss_epoch.append(train_loss)
     val_loss_epoch.append(val_loss)
 
