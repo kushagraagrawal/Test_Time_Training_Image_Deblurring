@@ -111,14 +111,14 @@ while e < args.nEpoch:
         # loss += loss_classification
 
         idx = random.randint(0, data['image'].shape[0])
-        img = data['image'][idx].squeeze()
-        blurred_img = data['inputImg'][idx].squeeze()
-        prediction_output = output1[idx].squeeze()
+        img = data['image'][idx].detach().cpu().squeeze()
+        blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
+        prediction_output = output1[idx].detach().cpu().squeeze()
         fig,axs = plt.subplots(1,3)
         axs[0].imshow(img.permute(1,2,0))
         axs[1].imshow(blurred_img.permute(1,2,0))
         axs[2].imshow(prediction_output.permute(1,2,0))
-        plt.savefig('valVisualization_%d.png'%(e))
+        plt.savefig('%s/trainVisualization_%d_%d.png'%(args.experiment, step, e))
 
         train_loss += loss_final
 
@@ -168,14 +168,14 @@ while e < args.nEpoch:
             accuracy = correct / total
 
             idx = random.randint(0, data['image'].shape[0])
-            img = data['image'][idx].squeeze()
-            blurred_img = data['inputImg'][idx].squeeze()
-            prediction_output = output1[idx].squeeze()
+            img = data['image'][idx].detach().cpu().squeeze()
+            blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
+            prediction_output = output1[idx].detach().cpu().squeeze()
             fig,axs = plt.subplots(1,3)
             axs[0].imshow(img.permute(1,2,0))
             axs[1].imshow(blurred_img.permute(1,2,0))
             axs[2].imshow(prediction_output.permute(1,2,0))
-            plt.savefig('valVisualization_%d.png'%(e))
+            plt.savefig('%s/valVisualization_%d_%d.png'%(args.experiment, step, e))
 
             val_loss += loss_final
 
