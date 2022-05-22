@@ -10,6 +10,8 @@ import torchvision.transforms as transforms
 from Models import Unet_encoder, Unet_decoder, Classifier
 import numpy as np
 import os
+import random
+import matplotlib.pyplot as plt
 
 # ============= argparser =============
 parser = argparse.ArgumentParser(description='training Params')
@@ -67,6 +69,8 @@ best_train_loss = np.inf
 best_val_loss = np.inf
 train_loss_epoch = []
 val_loss_epoch = []
+train_accuracy_epoch = []
+val_accuracy_epoch = []
 e = 0
 
 if(args.checkpoint is not None):
@@ -106,6 +110,16 @@ while e < args.nEpoch:
         accuracy = correct / total
         # loss += loss_classification
 
+        idx = random.randint(0, data['image'].shape[0])
+        img = data['image'][idx].squeeze()
+        blurred_img = data['inputImg'][idx].squeeze()
+        prediction_output = output1[idx].squeeze()
+        fig,axs = plt.subplots(1,3)
+        axs[0].imshow(img.permute(1,2,0))
+        axs[1].imshow(blurred_img.permute(1,2,0))
+        axs[2].imshow(prediction_output.permute(1,2,0))
+        plt.savefig('valVisualization_%d.png'%(e))
+
         train_loss += loss_final
 
         loss_final.backward()
@@ -114,6 +128,7 @@ while e < args.nEpoch:
         print('Train - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, trainIter, loss, loss_classification, accuracy))
     
     train_loss_epoch.append(train_loss)
+    train_accuracy_epoch.append(accuracy)
     if(train_loss < best_train_loss):
         print('************ saving checkpoint at epoch: %d ************'%(e))
         best_train_loss = train_loss
@@ -127,10 +142,13 @@ while e < args.nEpoch:
                    }, PATH)
 
     # val loop
-    if((e+1) % 4 == 0):
+    if((e+1) % 1 == 0):
         encoder.eval()
         decoder.eval()
         classifier.eval()
+
+        correct = 0
+        total = 0
         for step, (data) in enumerate(valCocoDL):
             valIter += 1
             gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
@@ -144,10 +162,27 @@ while e < args.nEpoch:
             loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
             loss_final = loss + loss_classification
 
+            _, predict = predictions.max(1)
+            total += classImg.size(0)
+            correct += (predict==classImg).float().sum().item()
+            accuracy = correct / total
+
+            idx = random.randint(0, data['image'].shape[0])
+            img = data['image'][idx].squeeze()
+            blurred_img = data['inputImg'][idx].squeeze()
+            prediction_output = output1[idx].squeeze()
+            fig,axs = plt.subplots(1,3)
+            axs[0].imshow(img.permute(1,2,0))
+            axs[1].imshow(blurred_img.permute(1,2,0))
+            axs[2].imshow(prediction_output.permute(1,2,0))
+            plt.savefig('valVisualization_%d.png'%(e))
+
             val_loss += loss_final
 
-            print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f'%(e, valIter, loss, loss_classification))
+            print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, valIter, loss, loss_classification, accuracy))
+        
         val_loss_epoch.append(val_loss)
+        val_accuracy_epoch.append(accuracy)
         if(val_loss < best_val_loss):
             best_val_loss = loss
             torch.save(encoder.state_dict(), args.experiment + '/encoder.pth')
