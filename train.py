@@ -44,7 +44,7 @@ datasetTransform = transforms.Compose([
         transforms.ToTensor()
     ])
 
-pascalLoader = getPascalLoader(args.pascalCSV, args.trainBatchSize, shuffle=True, inputTransform=datasetTransform)
+# pascalLoader = getPascalLoader(args.pascalCSV, args.trainBatchSize, shuffle=True, inputTransform=datasetTransform)
 cocoDataset = CocoDataset(args.imageRoot, args.trainLabelRoot, transform=datasetTransform)
 trainCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.trainBatchSize, shuffle=True)
 
@@ -108,17 +108,23 @@ while e < args.nEpoch:
         total += classImg.size(0)
         correct += (predict==classImg).float().sum().item()
         accuracy = correct / total
-        # loss += loss_classification
-
-        idx = random.randint(0, data['image'].shape[0])
-        img = data['image'][idx].detach().cpu().squeeze()
-        blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
-        prediction_output = output1[idx].detach().cpu().squeeze()
-        fig,axs = plt.subplots(1,3)
-        axs[0].imshow(img.permute(1,2,0))
-        axs[1].imshow(blurred_img.permute(1,2,0))
-        axs[2].imshow(prediction_output.permute(1,2,0))
-        plt.savefig('%s/trainVisualization_%d_%d.png'%(args.experiment, step, e))
+        
+        
+        if(((step + 1) % 100) == 0):
+            idx = random.randint(0, data['image'].shape[0] - 1)
+            img = data['image'][idx].detach().cpu().squeeze()
+            blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
+        
+            prediction_output = output1[idx].detach().cpu().squeeze().numpy()
+            prediction_output = (prediction_output - np.min(prediction_output)) / np.max(prediction_output)
+            prediction_output = np.uint8(255 * prediction_output)
+            fig,axs = plt.subplots(1,3)
+            axs[0].imshow(img.permute(1,2,0))
+            axs[1].imshow(blurred_img.permute(1,2,0))
+            axs[2].imshow(prediction_output.transpose([1,2,0]))
+            plt.savefig('%s/trainVisualization_%d_%d.png'%(args.experiment, step, e))
+            fig.clf()
+            plt.close()
 
         train_loss += loss_final
 
@@ -142,7 +148,7 @@ while e < args.nEpoch:
                    }, PATH)
 
     # val loop
-    if((e+1) % 1 == 0):
+    with torch.no_grad():
         encoder.eval()
         decoder.eval()
         classifier.eval()
@@ -159,7 +165,7 @@ while e < args.nEpoch:
 
             # ===== self-supervised task =====
             predictions = classifier(x)
-            loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
+            loss_classification = criterionClassification(predictions, classImg)
             loss_final = loss + loss_classification
 
             _, predict = predictions.max(1)
@@ -167,15 +173,20 @@ while e < args.nEpoch:
             correct += (predict==classImg).float().sum().item()
             accuracy = correct / total
 
-            idx = random.randint(0, data['image'].shape[0])
-            img = data['image'][idx].detach().cpu().squeeze()
-            blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
-            prediction_output = output1[idx].detach().cpu().squeeze()
-            fig,axs = plt.subplots(1,3)
-            axs[0].imshow(img.permute(1,2,0))
-            axs[1].imshow(blurred_img.permute(1,2,0))
-            axs[2].imshow(prediction_output.permute(1,2,0))
-            plt.savefig('%s/valVisualization_%d_%d.png'%(args.experiment, step, e))
+            if(((step + 1) % 100) == 0):
+                idx = random.randint(0, data['image'].shape[0] - 1)
+                img = data['image'][idx].detach().cpu().squeeze()
+                blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
+                prediction_output = output1[idx].detach().cpu().squeeze().numpy()
+                prediction_output = (prediction_output - np.min(prediction_output)) / np.max(prediction_output)
+                prediction_output = np.uint8(255 * prediction_output)
+                fig,axs = plt.subplots(1,3)
+                axs[0].imshow(img.permute(1,2,0))
+                axs[1].imshow(blurred_img.permute(1,2,0))
+                axs[2].imshow(prediction_output.transpose([1,2,0]))
+                plt.savefig('%s/valVisualization_%d_%d.png'%(args.experiment, step, e))
+                fig.clf()
+                plt.close()
 
             val_loss += loss_final
 
