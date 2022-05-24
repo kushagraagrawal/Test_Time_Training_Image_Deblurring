@@ -3,6 +3,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim import lr_scheduler
 from PASCALLoader import getPascalLoader
 from cocoLoader import CocoDataset
 from torch.utils.data import DataLoader
@@ -26,6 +27,8 @@ parser.add_argument('--valBatchSize', default=8, help='val batch size', type=int
 parser.add_argument('--nEpoch', default=10, help='epochs', type=int)
 parser.add_argument('--experiment', default='train_result', help='result dir', type=str)
 parser.add_argument('--checkpoint', default=None, help='restore training from checkpoint', type=str)
+parser.add_argument('--lr_milestones', default=[10, 20, 30, 40])
+parser.add_argument('--gamma', default=0.2)
 
 args = parser.parse_args()
 
@@ -78,8 +81,11 @@ if(args.checkpoint is not None):
     encoder.load_state_dict(checkpoint['encoder'])
     decoder.load_state_dict(checkpoint['decoder'])
     classifier.load_state_dict(checkpoint['classifier'])
-    e = checkpoint['epoch']
-    best_train_loss = checkpoint['loss']
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    e = checkpoint['epoch'] + 1
+    best_val_loss = checkpoint['loss']
+    
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_milestones, gamma=args.gamma)
 
 while e < args.nEpoch:
     encoder.train()
@@ -110,7 +116,9 @@ while e < args.nEpoch:
         accuracy = correct / total
         
         
-        if(((step + 1) % 100) == 0):
+        if(((trainIter + 1) % 100) == 0):
+            os.system('mkdir %s/%s'%(args.experiment, 'epoch_' + str(e)))
+            
             idx = random.randint(0, data['image'].shape[0] - 1)
             img = data['image'][idx].detach().cpu().squeeze()
             blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
@@ -122,11 +130,11 @@ while e < args.nEpoch:
             axs[0].imshow(img.permute(1,2,0))
             axs[1].imshow(blurred_img.permute(1,2,0))
             axs[2].imshow(prediction_output.transpose([1,2,0]))
-            plt.savefig('%s/trainVisualization_%d_%d.png'%(args.experiment, step, e))
+            plt.savefig('%s/%s/trainVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), step, e))
             fig.clf()
             plt.close()
 
-        train_loss += loss_final
+        train_loss += loss_final.detach().cpu().numpy()
 
         loss_final.backward()
         optimizer.step()
@@ -135,17 +143,18 @@ while e < args.nEpoch:
     
     train_loss_epoch.append(train_loss)
     train_accuracy_epoch.append(accuracy)
+    scheduler.step()
     if(train_loss < best_train_loss):
-        print('************ saving checkpoint at epoch: %d ************'%(e))
+#         print('************ saving checkpoint at epoch: %d ************'%(e))
         best_train_loss = train_loss
-        PATH = args.experiment + '/checkpoint.ckpt'
-        torch.save({
-                   'encoder': encoder.state_dict(),
-                   'decoder': decoder.state_dict(),
-                   'classifier': classifier.state_dict(),
-                   'epoch': e,
-                   'loss': best_train_loss
-                   }, PATH)
+#         PATH = args.experiment + '/checkpoint_temp.ckpt'
+#         torch.save({
+#                    'encoder': encoder.state_dict(),
+#                    'decoder': decoder.state_dict(),
+#                    'classifier': classifier.state_dict(),
+#                    'epoch': e,
+#                    'loss': best_train_loss
+#                    }, PATH)
 
     # val loop
     with torch.no_grad():
@@ -173,7 +182,7 @@ while e < args.nEpoch:
             correct += (predict==classImg).float().sum().item()
             accuracy = correct / total
 
-            if(((step + 1) % 100) == 0):
+            if(((valIter + 1) % 100) == 0):
                 idx = random.randint(0, data['image'].shape[0] - 1)
                 img = data['image'][idx].detach().cpu().squeeze()
                 blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
@@ -184,11 +193,11 @@ while e < args.nEpoch:
                 axs[0].imshow(img.permute(1,2,0))
                 axs[1].imshow(blurred_img.permute(1,2,0))
                 axs[2].imshow(prediction_output.transpose([1,2,0]))
-                plt.savefig('%s/valVisualization_%d_%d.png'%(args.experiment, step, e))
+                plt.savefig('%s/%s/valVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), step, e))
                 fig.clf()
                 plt.close()
 
-            val_loss += loss_final
+            val_loss += loss_final.detach().cpu().numpy()
 
             print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, valIter, loss, loss_classification, accuracy))
         
@@ -199,10 +208,22 @@ while e < args.nEpoch:
             torch.save(encoder.state_dict(), args.experiment + '/encoder.pth')
             torch.save(decoder.state_dict(), args.experiment + '/decoder.pth')
             torch.save(classifier.state_dict(), args.experiment + '/classifier.pth')
+            
+            print('************ saving checkpoint at epoch: %d ************'%(e))
+            best_train_loss = train_loss
+            PATH = args.experiment + '/checkpoint.ckpt'
+            torch.save({
+                       'encoder': encoder.state_dict(),
+                       'decoder': decoder.state_dict(),
+                       'classifier': classifier.state_dict(),
+                       'optimizer': optimizer.state_dict(),
+                       'epoch': e,
+                       'loss': best_val_loss
+                       }, PATH)
     
     e += 1
     train_loss_epoch.append(train_loss)
     val_loss_epoch.append(val_loss)
 
-np.save(args.experiment + '/train_loss.npy', train_loss_epoch)
-np.save(args.experiment + '/val_loss.npy', val_loss_epoch)
+np.save(args.experiment + '/train_loss.npy', np.array(train_loss_epoch))
+np.save(args.experiment + '/val_loss.npy', np.array(val_loss_epoch))
