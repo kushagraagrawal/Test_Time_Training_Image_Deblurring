@@ -8,10 +8,10 @@ from pycocotools.coco import COCO
 import cv2
 import torch
 
-transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor()
-    ])
+# transform = transforms.Compose([
+#         transforms.Resize((256, 256)),
+#         transforms.ToTensor()
+#     ])
 
 category_dict = {'person': 1,
                  'bicycle': 2,
@@ -180,8 +180,12 @@ class CocoDataset(Dataset):
         target = self._load_target(ids)
 
         if(self.transform is not None):
+            torch.manual_seed(0)
             image = self.transform(image)
-            blurredImage = self.blur_transform(blurredImage)
+#             blurredImage = cv2.cvtColor(blurredImage, cv2.COLOR_BGR2RGB)
+#             blurredImage = Image.fromarray(blurredImage)
+            torch.manual_seed(0)
+            blurredImage = self.transform(blurredImage)
 
         return {'image': image, 'inputImg': blurredImage, 'class': target}
 
