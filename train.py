@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
 from PASCALLoader import getPascalLoader
 from cocoLoader import CocoDataset
 from torch.utils.data import DataLoader
@@ -34,6 +35,9 @@ args = parser.parse_args()
 
 os.system('mkdir %s'%(args.experiment))
 
+# ============= tensorboard visualisation =============
+writer = SummaryWriter()
+
 # ============= torch cuda =============
 if torch.cuda.is_available():
     device = 'cuda'
@@ -43,8 +47,9 @@ else:
 
 # ============= DataLoader =============
 datasetTransform = transforms.Compose([
+        transforms.ToTensor(),
         transforms.Resize((256, 256)),
-        transforms.ToTensor()
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2),
     ])
 
 # pascalLoader = getPascalLoader(args.pascalCSV, args.trainBatchSize, shuffle=True, inputTransform=datasetTransform)
@@ -110,6 +115,9 @@ while e < args.nEpoch:
         predictions = classifier(x)
         loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
         loss_final = loss + loss_classification
+        
+        writer.add_scalar("Loss_classification/train_iteration", loss_classification, trainIter)
+        writer.add_scalar("Loss_deblur/train_iteration", loss, trainIter)
         _, predict = predictions.max(1)
         total += classImg.size(0)
         correct += (predict==classImg).float().sum().item()
@@ -130,7 +138,7 @@ while e < args.nEpoch:
             axs[0].imshow(img.permute(1,2,0))
             axs[1].imshow(blurred_img.permute(1,2,0))
             axs[2].imshow(prediction_output.transpose([1,2,0]))
-            plt.savefig('%s/%s/trainVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), step, e))
+            plt.savefig('%s/%s/trainVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), trainIter, e))
             fig.clf()
             plt.close()
 
@@ -142,19 +150,9 @@ while e < args.nEpoch:
         print('Train - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, trainIter, loss, loss_classification, accuracy))
     
     train_loss_epoch.append(train_loss)
+    writer.add_scalar("Loss_epoch/train", train_loss, e+1)
+    writer.add_scalar("Accuracy_epoch/train", accuracy, e+1)
     train_accuracy_epoch.append(accuracy)
-    scheduler.step()
-    if(train_loss < best_train_loss):
-#         print('************ saving checkpoint at epoch: %d ************'%(e))
-        best_train_loss = train_loss
-#         PATH = args.experiment + '/checkpoint_temp.ckpt'
-#         torch.save({
-#                    'encoder': encoder.state_dict(),
-#                    'decoder': decoder.state_dict(),
-#                    'classifier': classifier.state_dict(),
-#                    'epoch': e,
-#                    'loss': best_train_loss
-#                    }, PATH)
 
     # val loop
     with torch.no_grad():
@@ -176,6 +174,9 @@ while e < args.nEpoch:
             predictions = classifier(x)
             loss_classification = criterionClassification(predictions, classImg)
             loss_final = loss + loss_classification
+            
+            writer.add_scalar("Loss_classification/val_iteration", loss_classification, valIter)
+            writer.add_scalar("Loss_deblur/val_iteration", loss, valIter)
 
             _, predict = predictions.max(1)
             total += classImg.size(0)
@@ -193,7 +194,7 @@ while e < args.nEpoch:
                 axs[0].imshow(img.permute(1,2,0))
                 axs[1].imshow(blurred_img.permute(1,2,0))
                 axs[2].imshow(prediction_output.transpose([1,2,0]))
-                plt.savefig('%s/%s/valVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), step, e))
+                plt.savefig('%s/%s/valVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), valIter, e))
                 fig.clf()
                 plt.close()
 
@@ -203,15 +204,18 @@ while e < args.nEpoch:
         
         val_loss_epoch.append(val_loss)
         val_accuracy_epoch.append(accuracy)
+        writer.add_scalar("Loss_epoch/val", val_loss, e+1)
+        writer.add_scalar("Accuracy_epoch/val", accuracy, e+1)
+        
         if(val_loss < best_val_loss):
-            best_val_loss = loss
+            best_val_loss = val_loss
             torch.save(encoder.state_dict(), args.experiment + '/encoder.pth')
             torch.save(decoder.state_dict(), args.experiment + '/decoder.pth')
             torch.save(classifier.state_dict(), args.experiment + '/classifier.pth')
             
             print('************ saving checkpoint at epoch: %d ************'%(e))
             best_train_loss = train_loss
-            PATH = args.experiment + '/checkpoint.ckpt'
+            PATH = args.experiment + '/checkpoint_' + str(e) + '.ckpt'
             torch.save({
                        'encoder': encoder.state_dict(),
                        'decoder': decoder.state_dict(),
@@ -222,8 +226,7 @@ while e < args.nEpoch:
                        }, PATH)
     
     e += 1
-    train_loss_epoch.append(train_loss)
-    val_loss_epoch.append(val_loss)
+    scheduler.step()
 
-np.save(args.experiment + '/train_loss.npy', np.array(train_loss_epoch))
-np.save(args.experiment + '/val_loss.npy', np.array(val_loss_epoch))
+    np.save(args.experiment + '/train_loss.npy', np.array(train_loss_epoch))
+    np.save(args.experiment + '/val_loss.npy', np.array(val_loss_epoch))
