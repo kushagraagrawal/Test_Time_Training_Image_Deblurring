@@ -8,11 +8,6 @@ from pycocotools.coco import COCO
 import cv2
 import torch
 
-# transform = transforms.Compose([
-#         transforms.Resize((256, 256)),
-#         transforms.ToTensor()
-#     ])
-
 category_dict = {'person': 1,
                  'bicycle': 2,
                  'car': 3,
@@ -190,7 +185,11 @@ class CocoDataset(Dataset):
         return {'image': image, 'inputImg': blurredImage, 'class': target}
 
 if(__name__ == '__main__'):
-    cocoData = CocoDataset('train2014', 'annotations/instances_train2014.json', transform=transform)
+    trans = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((256, 256))
+    ])
+    cocoData = CocoDataset('train2014', 'annotations/instances_train2014.json', transform=trans)
     dl = DataLoader(cocoData, batch_size=2, shuffle=True)
     for step, (data) in enumerate(dl):
         a = step

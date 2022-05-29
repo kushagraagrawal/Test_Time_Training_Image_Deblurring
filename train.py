@@ -30,6 +30,7 @@ parser.add_argument('--experiment', default='train_result', help='result dir', t
 parser.add_argument('--checkpoint', default=None, help='restore training from checkpoint', type=str)
 parser.add_argument('--lr_milestones', default=[10, 20, 30, 40])
 parser.add_argument('--gamma', default=0.2)
+parser.add_argument('--weight_decay', default=1e-5)
 
 args = parser.parse_args()
 
@@ -49,6 +50,8 @@ else:
 datasetTransform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize((256, 256)),
+        transforms.RandomRotation(10),
+        transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2),
     ])
 
@@ -66,7 +69,7 @@ classifier = Classifier().to(device)
 
 # ============= optimizer, loss func =============
 params = list(encoder.parameters()) + list(decoder.parameters()) + list(classifier.parameters())
-optimizer = optim.Adam(params, lr=args.initLR)
+optimizer = optim.Adam(params, lr=args.initLR, weight_decay=args.weight_decay)
 criterionDeblur = nn.MSELoss() # for now
 criterionClassification = nn.CrossEntropyLoss()
 
