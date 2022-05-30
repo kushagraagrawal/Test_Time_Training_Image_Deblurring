@@ -2,7 +2,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import pandas as pd
-import os
+from cocoLoader import temp_dict
 import torch
 import cv2
 import numpy as np
@@ -83,7 +83,7 @@ class PascalVOCLoader(Dataset):
         img_name = self.inputDf.iloc[index, 0]
         img = Image.open(img_name)
         blurredImg = self.getBlurredOutput(img_name)
-        outputClass = self.inputDf.iloc[index, 1]
+        outputClass = temp_dict[self.inputDf.iloc[index, 1]]
         sample = {'inputImg':blurredImg, 'image': img, 'class': outputClass}
 
         if(self.transforms):
