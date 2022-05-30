@@ -51,7 +51,7 @@ datasetTransform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize((256, 256)),
         transforms.RandomRotation(10),
-        transforms.RandomHorizontalFlip(),
+        # transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2),
     ])
 
@@ -141,6 +141,7 @@ while e < args.nEpoch:
             axs[0].imshow(img.permute(1,2,0))
             axs[1].imshow(blurred_img.permute(1,2,0))
             axs[2].imshow(prediction_output.transpose([1,2,0]))
+            plt.show()
             plt.savefig('%s/%s/trainVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), trainIter, e))
             fig.clf()
             plt.close()
@@ -152,8 +153,8 @@ while e < args.nEpoch:
 
         print('Train - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, trainIter, loss, loss_classification, accuracy))
     
-    train_loss_epoch.append(train_loss)
-    writer.add_scalar("Loss_epoch/train", train_loss, e+1)
+    train_loss_epoch.append(train_loss/total)
+    writer.add_scalar("Loss_epoch/train", train_loss/total, e+1)
     writer.add_scalar("Accuracy_epoch/train", accuracy, e+1)
     train_accuracy_epoch.append(accuracy)
 
@@ -205,9 +206,9 @@ while e < args.nEpoch:
 
             print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, valIter, loss, loss_classification, accuracy))
         
-        val_loss_epoch.append(val_loss)
+        val_loss_epoch.append(val_loss/total)
         val_accuracy_epoch.append(accuracy)
-        writer.add_scalar("Loss_epoch/val", val_loss, e+1)
+        writer.add_scalar("Loss_epoch/val", val_loss/total, e+1)
         writer.add_scalar("Accuracy_epoch/val", accuracy, e+1)
         
         if(val_loss < best_val_loss):
