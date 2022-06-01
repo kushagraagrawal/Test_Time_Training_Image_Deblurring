@@ -28,9 +28,10 @@ parser.add_argument('--valBatchSize', default=8, help='val batch size', type=int
 parser.add_argument('--nEpoch', default=10, help='epochs', type=int)
 parser.add_argument('--experiment', default='train_result', help='result dir', type=str)
 parser.add_argument('--checkpoint', default=None, help='restore training from checkpoint', type=str)
-parser.add_argument('--lr_milestones', default=[10, 20, 30, 40])
-parser.add_argument('--gamma', default=0.2)
-parser.add_argument('--weight_decay', default=1e-5)
+parser.add_argument('--lr_milestones', help='LR milestones', default=[10, 20, 30, 40])
+parser.add_argument('--gamma', default=0.2, help='gamma value', type=float)
+parser.add_argument('--weight_decay', help='regularization weight decay', default=1e-5, type=float)
+parser.add_argument('--loss_weightage',help='weightage to deblur loss', default=0.5, type=float)
 
 args = parser.parse_args()
 
@@ -70,10 +71,11 @@ classifier = Classifier().to(device)
 # ============= optimizer, loss func =============
 params = list(encoder.parameters()) + list(decoder.parameters()) + list(classifier.parameters())
 optimizer = optim.Adam(params, lr=args.initLR, weight_decay=args.weight_decay)
-criterionDeblur = nn.MSELoss() # for now
+# criterionDeblur = nn.MSELoss() # for now
+criterionDeblur = nn.L1Loss()
 criterionClassification = nn.CrossEntropyLoss()
 
-# ============= training/val loop =============
+# ============= loss arrays =============
 trainIter = 0
 valIter = 0
 best_train_loss = np.inf
@@ -84,6 +86,7 @@ train_accuracy_epoch = []
 val_accuracy_epoch = []
 e = 0
 
+# ============= load checkpoint =============
 if(args.checkpoint is not None):
     checkpoint = torch.load(args.checkpoint)
     encoder.load_state_dict(checkpoint['encoder'])
@@ -95,6 +98,7 @@ if(args.checkpoint is not None):
     
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_milestones, gamma=args.gamma)
 
+# ============= train/val loop =============
 while e < args.nEpoch:
     encoder.train()
     decoder.train()
@@ -104,6 +108,7 @@ while e < args.nEpoch:
     
     correct = 0
     total = 0
+    
     # train loop
     for step, (data) in enumerate(trainCocoDL):
         trainIter += 1
@@ -116,17 +121,20 @@ while e < args.nEpoch:
 
         # ===== self-supervised task =====
         predictions = classifier(x)
-        loss_classification = criterionClassification(predictions, classImg) # potential shape mismatch
-        loss_final = loss + loss_classification
+        loss_classification = criterionClassification(predictions, classImg)
+        
+        loss_final = (args.loss_weightage * loss) + ((1 - args.loss_weightage) * loss_classification)
         
         writer.add_scalar("Loss_classification/train_iteration", loss_classification, trainIter)
         writer.add_scalar("Loss_deblur/train_iteration", loss, trainIter)
+        
+        # ===== accuracy calculation =====
         _, predict = predictions.max(1)
         total += classImg.size(0)
         correct += (predict==classImg).float().sum().item()
         accuracy = correct / total
         
-        
+        # ===== visualise the predictions =====
         if(((trainIter + 1) % 100) == 0):
             os.system('mkdir %s/%s'%(args.experiment, 'epoch_' + str(e)))
             
@@ -141,8 +149,8 @@ while e < args.nEpoch:
             axs[0].imshow(img.permute(1,2,0))
             axs[1].imshow(blurred_img.permute(1,2,0))
             axs[2].imshow(prediction_output.transpose([1,2,0]))
-            plt.show()
             plt.savefig('%s/%s/trainVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), trainIter, e))
+            plt.show()
             fig.clf()
             plt.close()
 
@@ -177,16 +185,19 @@ while e < args.nEpoch:
             # ===== self-supervised task =====
             predictions = classifier(x)
             loss_classification = criterionClassification(predictions, classImg)
-            loss_final = loss + loss_classification
+            
+            loss_final = (args.loss_weightage * loss) + ((1 - args.loss_weightage) * loss_classification)
             
             writer.add_scalar("Loss_classification/val_iteration", loss_classification, valIter)
             writer.add_scalar("Loss_deblur/val_iteration", loss, valIter)
-
+            
+            # ===== accuracy calculation =====
             _, predict = predictions.max(1)
             total += classImg.size(0)
             correct += (predict==classImg).float().sum().item()
             accuracy = correct / total
-
+            
+            #  ===== visualise the predictions =====
             if(((valIter + 1) % 100) == 0):
                 idx = random.randint(0, data['image'].shape[0] - 1)
                 img = data['image'][idx].detach().cpu().squeeze()
