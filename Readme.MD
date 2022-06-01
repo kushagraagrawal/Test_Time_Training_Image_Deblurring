@@ -17,6 +17,8 @@ Project for ECE 285
 ## Notes
 05/31/2022
 - Switched from L2 to L1 Loss for the deblur task, supposedly more robust and should deal with overfitting issues. Also taking weighted sum of the losses instead of simple addition
+- Using weighted sums gave lower loss for validations and training, and slightly higher accuracy (blue is using 0.8 weight for deblur, red is 0.5):
+<img src="Weighted_sum_measurement.png">
 
 05/17/2022
 - In CocoLoader, tried picking training images with just 1 annotation (commented out code in `cocoLoader.py`), resulted in only 3745 images.
