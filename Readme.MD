@@ -15,6 +15,12 @@ Project for ECE 285
 - Coco API - https://github.com/cocodataset/cocoapi
 
 ## Notes
+06/03/2022
+- Ran for variation of deblur (10 epochs) on Colab - [link](https://colab.research.google.com/drive/1f0EjC_3cjgBUq686IOmDpuQPMtcOotOX). Results are as follows:
+<img src="Horizontal and Vertical Blur.png">
+<img src="only average blurring.png">
+<img src="Only Gaussian Blur(1).png">
+
 05/31/2022
 - Switched from L2 to L1 Loss for the deblur task, supposedly more robust and should deal with overfitting issues. Also taking weighted sum of the losses instead of simple addition
 - Using weighted sums gave lower loss for validations and training, and slightly higher accuracy (blue is using 0.8 weight for deblur, red is 0.5):
