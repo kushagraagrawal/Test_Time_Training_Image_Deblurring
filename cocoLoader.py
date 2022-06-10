@@ -122,6 +122,7 @@ class CocoDataset(Dataset):
         p = torch.rand(1)
         k_size = 15
         
+        #return self.gaussian_blur(img_path,k_size)
         if p<=0.25:
             #print("Vertical")
             return self.motion_blur_vertical(img_path,k_size)
@@ -175,11 +176,11 @@ class CocoDataset(Dataset):
         target = self._load_target(ids)
 
         if(self.transform is not None):
-            torch.manual_seed(0)
+            # torch.manual_seed(0)
             image = self.transform(image)
 #             blurredImage = cv2.cvtColor(blurredImage, cv2.COLOR_BGR2RGB)
 #             blurredImage = Image.fromarray(blurredImage)
-            torch.manual_seed(0)
+            # torch.manual_seed(0)
             blurredImage = self.transform(blurredImage)
 
         return {'image': image, 'inputImg': blurredImage, 'class': target}

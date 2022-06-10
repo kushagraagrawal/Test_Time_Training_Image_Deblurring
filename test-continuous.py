@@ -43,7 +43,7 @@ datasetTransform = transforms.Compose([
         transforms.ToTensor()
     ])
 
-pascalLoader = getPascalLoader(args.pascalCSV,1, shuffle=True, inputTransform=datasetTransform)
+pascalLoader = getPascalLoader(args.pascalCSV,8, shuffle=True, inputTransform=datasetTransform)
 
 # ============= model =============
 
@@ -83,12 +83,15 @@ criterionClassification = nn.CrossEntropyLoss()
 trainIter = 0
 valIter = 0
 
+#Before training scores
 psnr_before = []
-psnr_after = []
-ssim_before = []
-ssim_after = []
 uqi_before = []
+ssim_before = []
+
+#After training scores
+psnr_after = []
 uqi_after = []
+ssim_after = []
 
 it = 0
 accuracy = 0
@@ -117,74 +120,77 @@ def get_metrics(orig_img,pred_img):
     
     return psnr_score,ssim_score,uqi_score
 
-encoder_copy = copy.deepcopy(encoder).to(device)
-decoder_copy = copy.deepcopy(decoder).to(device)
-classifier_copy = copy.deepcopy(classifier).to(device)
+encoder_new = copy.deepcopy(encoder).to(device)
+decoder_new = decoder #Since decoder does not train
+classifier_new = copy.deepcopy(classifier).to(device)
+        
+encoder_new.train()
+decoder_new.eval()
+classifier_new.train()
 
+
+params = list(encoder_new.parameters()) + list(classifier_new.parameters())
+optimizer = optim.Adam(params, lr=args.LR)
+
+print("Starting Training")
+#Training on PASCAL
+for e in tqdm(range(args.nEpoch)):
+    for step, (data) in enumerate(pascalLoader):
+        
+        optimizer.zero_grad()
+        gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
+        x, skip_connections = encoder_new(blurImg)
+        output1 = decoder_new(x, skip_connections)
+
+        # ===== self-supervised task =====
+        predictions = classifier_new(x)
+        loss_classification = criterionClassification(predictions, classImg)
+
+        loss_classification.backward()
+        optimizer.step()
+print("Finished Training")     
+
+#Evaluate on PASCAL
+encoder_new.eval()
+decoder_new.eval()
+classifier_new.eval()
+pascalLoader = getPascalLoader(args.pascalCSV,1, shuffle=True, inputTransform=datasetTransform)
+
+print("Starting Evaluation")
+it = 0
 for step, (data) in tqdm(enumerate(pascalLoader)):
     
-        encoder_copy = copy.deepcopy(encoder).to(device)
-        decoder_copy = copy.deepcopy(decoder).to(device)
-        classifier_copy = copy.deepcopy(classifier).to(device)
-        
-        params = list(encoder_copy.parameters()) + list(classifier_copy.parameters())
-        optimizer = optim.SGD(params, lr=args.LR)
-    
-        encoder_copy.train()
-        decoder_copy.eval()
-        classifier_copy.train()
-
         gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
-        #print("classImg",classImg)
-        
         it += 1
         
-        for e in range(args.nEpoch):
-            encoder_copy.train()
-            decoder_copy.eval()
-            classifier_copy.train()
-            
-            optimizer.zero_grad()
-            x, skip_connections = encoder_copy(blurImg)
-            if args.SPP:
-                output1 = decoder_copy(blurImg, skip_connections)
-            else:
-                output1 = decoder_copy(x, skip_connections)
-            
-            # ===== self-supervised task =====
-            predictions = classifier_copy(x)
-            loss_classification = criterionClassification(predictions, classImg)
-            
-            loss_classification.backward()
-            optimizer.step()
-            
-            #Computing metrics before test time training
-            if e==0:
-                with torch.no_grad():
-                    pred_img = decoder_copy(x, skip_connections)
-                    psnr_score,ssim_score,uqi_score = get_metrics(gtImg[0],pred_img[0])
-                    psnr_before.append(psnr_score)
-                    ssim_before.append(ssim_score)
-                    uqi_before.append(uqi_score)
-                    
-            #Computing metrics after test time training
-            if e==args.nEpoch-1:
-                with torch.no_grad():
-                    pred_img = decoder_copy(x, skip_connections)
-                    psnr_score,ssim_score,uqi_score = get_metrics(gtImg[0],pred_img[0])
-                    psnr_after.append(psnr_score)
-                    ssim_after.append(ssim_score)
-                    uqi_after.append(uqi_score)
-            
+        #Evaluate before test time training
+        with torch.no_grad():
+            x, skip_connections = encoder(blurImg)
+            pred_img = decoder(x, skip_connections)
+            psnr_score,ssim_score,uqi_score = get_metrics(gtImg[0],pred_img[0])
+            psnr_before.append(psnr_score)
+            ssim_before.append(ssim_score)
+            uqi_before.append(uqi_score)
+
+        #Computing metrics after test time training
+        with torch.no_grad():
+            x, skip_connections = encoder_new(blurImg)
+            pred_img = decoder_new(x, skip_connections)
+            psnr_score,ssim_score,uqi_score = get_metrics(gtImg[0],pred_img[0])
+            psnr_after.append(psnr_score)
+            ssim_after.append(ssim_score)
+            uqi_after.append(uqi_score)
+
         if it%100 == 0:
             print('instances: %d \n Average Before Test Time Training: SSIM %f PSNR %f UQI %f \n Average After Test Time SSIM %f PSNR %f UQI %f' %(it,np.mean(ssim_before),np.mean(psnr_before),np.mean(uqi_before),np.mean(ssim_after),np.mean(psnr_after),np.mean(uqi_after)))
 
 print('Total instances: %d \n Average Before Test Time Training: SSIM %f PSNR %f UQI %f \n Average After Test Time SSIM %f PSNR %f UQI %f' %(it,np.mean(ssim_before),np.mean(psnr_before),np.mean(uqi_before),np.mean(ssim_after),np.mean(psnr_after),np.mean(uqi_after)))
 
 print('Saving model')
-PATH = args.experiment + '/ttt_' + str(args.nEpoch) + '.ckpt'
+PATH = args.experiment + '/continuous_ttt_' + str(args.nEpoch) + '.ckpt'
 torch.save({
                'encoder': encoder_new.state_dict(),
                'decoder': decoder_new.state_dict(),
                'classifier': classifier_new.state_dict(),
                }, PATH)
+        

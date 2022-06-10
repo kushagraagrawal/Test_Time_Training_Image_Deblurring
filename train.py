@@ -9,11 +9,15 @@ from PASCALLoader import getPascalLoader
 from cocoLoader import CocoDataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from Models import Unet_encoder, Unet_decoder, Classifier
+from Model_architectures import Unet,SPP,Resnet,Unet2
+#from Models import *
 import numpy as np
 import os
 import random
 import matplotlib.pyplot as plt
+import torchvision.models.resnet as resnet
+from torchvision.utils import save_image
+from torchmetrics import StructuralSimilarityIndexMeasure as SSIM
 
 # ============= argparser =============
 parser = argparse.ArgumentParser(description='training Params')
@@ -28,10 +32,15 @@ parser.add_argument('--valBatchSize', default=8, help='val batch size', type=int
 parser.add_argument('--nEpoch', default=10, help='epochs', type=int)
 parser.add_argument('--experiment', default='train_result', help='result dir', type=str)
 parser.add_argument('--checkpoint', default=None, help='restore training from checkpoint', type=str)
-parser.add_argument('--lr_milestones', help='LR milestones', default=[10, 20, 30, 40])
+parser.add_argument('--lr_milestones', help='LR milestones', default=[5,10,15,20,25,30])
 parser.add_argument('--gamma', default=0.2, help='gamma value', type=float)
-parser.add_argument('--weight_decay', help='regularization weight decay', default=1e-5, type=float)
+parser.add_argument('--weight_decay', help='regularization weight decay', default=1e-4, type=float)
 parser.add_argument('--loss_weightage',help='weightage to deblur loss', default=0.5, type=float)
+parser.add_argument("--SPP", action="store_true")
+parser.add_argument("--SGD", action="store_true")
+parser.add_argument("--SSIM", action="store_true")
+parser.add_argument('--model', default='Unet',choices=['Unet', 'SPP', 'Resnet','Unet2'])
+
 
 args = parser.parse_args()
 
@@ -51,29 +60,48 @@ else:
 datasetTransform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize((256, 256)),
-        transforms.RandomRotation(10),
-        # transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2),
     ])
 
-# pascalLoader = getPascalLoader(args.pascalCSV, args.trainBatchSize, shuffle=True, inputTransform=datasetTransform)
-cocoDataset = CocoDataset(args.imageRoot, args.trainLabelRoot, transform=datasetTransform)
-trainCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.trainBatchSize, shuffle=True)
+trainCocoDataset = CocoDataset(args.imageRoot, args.trainLabelRoot, transform=datasetTransform)
+trainCocoDL = DataLoader(dataset=trainCocoDataset, batch_size=args.trainBatchSize, shuffle=True)
 
-cocoDataset = CocoDataset(args.valImageRoot, args.valLabelRoot, transform=datasetTransform)
-valCocoDL = DataLoader(dataset=cocoDataset, batch_size=args.valBatchSize, shuffle=True)
+valCocoDataset = CocoDataset(args.valImageRoot, args.valLabelRoot, transform=datasetTransform)
+valCocoDL = DataLoader(dataset=valCocoDataset, batch_size=args.valBatchSize, shuffle=True)
 
 # ============= model =============
-encoder = Unet_encoder(in_channels=3).to(device)
-decoder = Unet_decoder().to(device)
-classifier = Classifier().to(device)
+
+if args.model == 'Unet':
+    encoder = Unet.Encoder(in_channels=3).to(device)
+    decoder = Unet.Decoder().to(device)
+    classifier = Unet.Classifier().to(device)
+    # loadPretrainedWeight(encoder)
+    
+elif args.model == 'SPP':
+    encoder = SPP.Encoder().to(device)
+    decoder = SPP.Decoder().to(device)
+    classifier = SPP.Classifier().to(device)
+    
+elif args.model == 'Resnet':
+    encoder = Resnet.Encoder().to(device)
+    decoder = Resnet.Decoder().to(device)
+    classifier = Resnet.Classifier().to(device)
+    
+elif args.model == 'Unet2':
+    encoder = Unet2.Encoder(in_channels=3).to(device)
+    decoder = Unet2.Decoder().to(device)
+    classifier = Unet2.Classifier().to(device)
+    
+else:
+    print("Invlaid Model choice")
 
 # ============= optimizer, loss func =============
 params = list(encoder.parameters()) + list(decoder.parameters()) + list(classifier.parameters())
-optimizer = optim.Adam(params, lr=args.initLR, weight_decay=args.weight_decay)
-# criterionDeblur = nn.MSELoss() # for now
+
+optimizer = optim.Adam(params,lr=args.initLR, weight_decay=args.weight_decay)
+
 criterionDeblur = nn.L1Loss()
 criterionClassification = nn.CrossEntropyLoss()
+criterion_ssim = SSIM()
 
 # ============= loss arrays =============
 trainIter = 0
@@ -96,7 +124,11 @@ if(args.checkpoint is not None):
     e = checkpoint['epoch'] + 1
     best_val_loss = checkpoint['loss']
     
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_milestones, gamma=args.gamma)
+scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, verbose=True)
+
+def save_decoded_image(img, name):
+    img = img.view(img.size(0), 3, 256, 256)
+    save_image(img, name)
 
 # ============= train/val loop =============
 while e < args.nEpoch:
@@ -116,7 +148,10 @@ while e < args.nEpoch:
         gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
 
         x, skip_connections = encoder(blurImg)
-        output1 = decoder(x, skip_connections)
+        if args.SPP:
+            output1 = decoder(blurImg, skip_connections)
+        else:
+            output1 = decoder(x, skip_connections)
         loss = criterionDeblur(output1, gtImg)
 
         # ===== self-supervised task =====
@@ -128,6 +163,11 @@ while e < args.nEpoch:
         writer.add_scalar("Loss_classification/train_iteration", loss_classification, trainIter)
         writer.add_scalar("Loss_deblur/train_iteration", loss, trainIter)
         
+        if args.SSIM:
+            loss_ssim = 1-criterion_ssim(output1, gtImg)
+            loss_final += loss_ssim
+            writer.add_scalar("Loss_SSIM/train_iteration", loss_ssim, trainIter)
+        
         # ===== accuracy calculation =====
         _, predict = predictions.max(1)
         total += classImg.size(0)
@@ -135,31 +175,21 @@ while e < args.nEpoch:
         accuracy = correct / total
         
         # ===== visualise the predictions =====
-        if(((trainIter + 1) % 100) == 0):
+        if(step == int((len(trainCocoDataset)/trainCocoDL.batch_size)-1)):
             os.system('mkdir %s/%s'%(args.experiment, 'epoch_' + str(e)))
-            
-            idx = random.randint(0, data['image'].shape[0] - 1)
-            img = data['image'][idx].detach().cpu().squeeze()
-            blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
-        
-            prediction_output = output1[idx].detach().cpu().squeeze().numpy()
-            prediction_output = (prediction_output - np.min(prediction_output)) / np.max(prediction_output)
-            prediction_output = np.uint8(255 * prediction_output)
-            fig,axs = plt.subplots(1,3)
-            axs[0].imshow(img.permute(1,2,0))
-            axs[1].imshow(blurred_img.permute(1,2,0))
-            axs[2].imshow(prediction_output.transpose([1,2,0]))
-            plt.savefig('%s/%s/trainVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), trainIter, e))
-            plt.show()
-            fig.clf()
-            plt.close()
+            save_decoded_image(gtImg.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/trainGroundTruth_{trainIter}_{e}.png')
+            save_decoded_image(blurImg.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/trainInputImage_{trainIter}_{e}.png')
+            save_decoded_image(output1.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/trainVisualization_{trainIter}_{e}.png')
 
-        train_loss += loss_final.detach().cpu().numpy()
+        train_loss += loss_final.item()
 
         loss_final.backward()
         optimizer.step()
 
-        print('Train - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, trainIter, loss, loss_classification, accuracy))
+        print('Train - Epoch: %d, Iteration: %d, deblur loss: %0.3f, Classification loss: %0.3f, Classification accuracy: %0.2f'%(e, trainIter, loss, loss_classification, accuracy))
+        if args.SSIM:
+            print('SSIM loss %0.4f'%(loss_ssim))
+            criterion_ssim.reset()
     
     train_loss_epoch.append(train_loss/total)
     writer.add_scalar("Loss_epoch/train", train_loss/total, e+1)
@@ -179,7 +209,10 @@ while e < args.nEpoch:
             gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
 
             x, skip_connections = encoder(blurImg)
-            output1 = decoder(x, skip_connections)
+            if args.SPP:
+                output1 = decoder(blurImg, skip_connections)
+            else:
+                output1 = decoder(x, skip_connections)
             loss = criterionDeblur(output1, gtImg)
 
             # ===== self-supervised task =====
@@ -191,6 +224,11 @@ while e < args.nEpoch:
             writer.add_scalar("Loss_classification/val_iteration", loss_classification, valIter)
             writer.add_scalar("Loss_deblur/val_iteration", loss, valIter)
             
+            if args.SSIM:
+                loss_ssim = 1-criterion_ssim(output1, gtImg)
+                loss_final += loss_ssim
+                writer.add_scalar("Loss_SSIM/val_iteration", loss_ssim, valIter)
+            
             # ===== accuracy calculation =====
             _, predict = predictions.max(1)
             total += classImg.size(0)
@@ -198,24 +236,19 @@ while e < args.nEpoch:
             accuracy = correct / total
             
             #  ===== visualise the predictions =====
-            if(((valIter + 1) % 100) == 0):
-                idx = random.randint(0, data['image'].shape[0] - 1)
-                img = data['image'][idx].detach().cpu().squeeze()
-                blurred_img = data['inputImg'][idx].detach().cpu().squeeze()
-                prediction_output = output1[idx].detach().cpu().squeeze().numpy()
-                prediction_output = (prediction_output - np.min(prediction_output)) / np.max(prediction_output)
-                prediction_output = np.uint8(255 * prediction_output)
-                fig,axs = plt.subplots(1,3)
-                axs[0].imshow(img.permute(1,2,0))
-                axs[1].imshow(blurred_img.permute(1,2,0))
-                axs[2].imshow(prediction_output.transpose([1,2,0]))
-                plt.savefig('%s/%s/valVisualization_%d_%d.png'%(args.experiment, 'epoch_' + str(e), valIter, e))
-                fig.clf()
-                plt.close()
+            if(step == int((len(valCocoDataset)/valCocoDL.batch_size)-1)):
+                # os.system('mkdir %s/%s'%(args.experiment, 'epoch_' + str(e)))
+                save_decoded_image(gtImg.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/valGroundTruth_{trainIter}_{e}.png')
+                save_decoded_image(blurImg.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/valInputImage_{trainIter}_{e}.png')
+                save_decoded_image(output1.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/valVisualization_{trainIter}_{e}.png')
 
-            val_loss += loss_final.detach().cpu().numpy()
+            val_loss += loss_final.item()
 
-            print('Val - Epoch: %d, Iteration: %d, deblur loss: %f, Classification loss: %f, Classification accuracy: %f'%(e, valIter, loss, loss_classification, accuracy))
+            print('Val - Epoch: %d, Iteration: %d, deblur loss: %0.3f, Classification loss: %0.3f, Classification accuracy: %0.2f'%(e, valIter, loss, loss_classification, accuracy))
+        
+            if args.SSIM:
+                print('SSIM loss %0.4f'%(loss_ssim))
+                criterion_ssim.reset()
         
         val_loss_epoch.append(val_loss/total)
         val_accuracy_epoch.append(accuracy)
@@ -235,13 +268,13 @@ while e < args.nEpoch:
                        'encoder': encoder.state_dict(),
                        'decoder': decoder.state_dict(),
                        'classifier': classifier.state_dict(),
-                       'optimizer': optimizer.state_dict(),
+                       'optimizer':optimizer.state_dict(),
                        'epoch': e,
                        'loss': best_val_loss
                        }, PATH)
-    
+        
     e += 1
-    scheduler.step()
+    scheduler.step(val_loss/total)
 
     np.save(args.experiment + '/train_loss.npy', np.array(train_loss_epoch))
     np.save(args.experiment + '/val_loss.npy', np.array(val_loss_epoch))

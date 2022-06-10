@@ -15,9 +15,7 @@ transform = transforms.Compose([
     ])
 
 class PascalVOCLoader(Dataset):
-    def getBlurredOutput(self, img):
-        return img
-        
+    
     def __init__(self, inputDf: pd.DataFrame, transform=None) -> None:
         super(PascalVOCLoader, self).__init__()
         self.inputDf = inputDf
@@ -62,6 +60,7 @@ class PascalVOCLoader(Dataset):
         #img_path = os.path.join(self.root, img_path)
         p = torch.rand(1)
         k_size = 15
+        #return self.gaussian_blur(img_path,k_size)
         
         if p<=0.25:
             #print("Vertical")

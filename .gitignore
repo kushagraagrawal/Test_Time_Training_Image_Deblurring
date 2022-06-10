@@ -7,3 +7,6 @@ VOCdevkit/
 .ipynb_checkpoints/
 train_result/
 __pycache__/
+*.png
+*.ckpt
+*.pth
