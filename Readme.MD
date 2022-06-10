@@ -1,30 +1,122 @@
 # Test Time Training Image Deblurring
-Project for ECE 285
+The project uses Test-Time Training for Image Deblurring.
+
+## Dataset download
+Simply run `bash datasetDownload.sh`
+
+## Run Demo
+- Download pretrained model from here - [link](https://drive.google.com/drive/folders/15cPC01SkFCAD3yAdjPY6v2JCl24Wo4o5?usp=sharing)
+- Place it in a folder `Unet_all_blur`
+- Install all dependencies using Conda and open jupyterlab
+    - `conda create --name TTT python=3.8 -y`
+    - `conda activate TTT`
+    - `python -m pip install -r requirements.txt`
+    - `jupyter lab`
+- Open `demo.ipynb` and run all the cells
+- Deactivate and remove the environment
+    - `conda deactivate`
+    - `conda env remove --name TTT`
 
 ## Files
 - cocoLoader.py -> Dataset class for MS COCO
 - PASCALLoader.py -> Dataset class for PASCAL VOC 2012
-- Models.py -> model classes
+- Model_architectures -> Folders containing model implementations for ResNet, UNet and SPP
 - train.py -> Training script
+- test.py -> Testing script
+- test-continuous.py -> Testing script for online Test-Time Training
 
-## Links to download Datasets
-- PASCAL VOC 2012 - http://host.robots.ox.ac.uk/pascal/VOC/voc2012/
-- MS COCO 2014 - https://archive.org/details/MSCoco2014
+## Command to train the model
+- Download the dataset using the shell script above
+- run `python train.py` with the following arguments
+```
+usage: train.py [-h] [--imageRoot IMAGEROOT] [--trainLabelRoot TRAINLABELROOT] [--valImageRoot VALIMAGEROOT]
+                [--valLabelRoot VALLABELROOT] [--pascalCSV PASCALCSV] [--initLR INITLR] [--trainBatchSize TRAINBATCHSIZE]
+                [--valBatchSize VALBATCHSIZE] [--nEpoch NEPOCH] [--experiment EXPERIMENT] [--checkpoint CHECKPOINT]
+                [--lr_milestones LR_MILESTONES] [--gamma GAMMA] [--weight_decay WEIGHT_DECAY]
+                [--loss_weightage LOSS_WEIGHTAGE] [--SPP] [--SGD] [--SSIM] [--model {Unet,SPP,Resnet,Unet2}]
 
-## Useful References
-- Coco API - https://github.com/cocodataset/cocoapi
+training Params
 
-## Notes
-06/03/2022
-- Ran for variation of deblur (10 epochs) on Colab - [link](https://colab.research.google.com/drive/1f0EjC_3cjgBUq686IOmDpuQPMtcOotOX). Results are as follows:
-<img src="Horizontal and Vertical Blur.png">
-<img src="only average blurring.png">
-<img src="Only Gaussian Blur(1).png">
+optional arguments:
+  -h, --help            show this help message and exit
+  --imageRoot IMAGEROOT
+                        location of the training images
+  --trainLabelRoot TRAINLABELROOT
+                        location of the train labels
+  --valImageRoot VALIMAGEROOT
+                        location of the training images
+  --valLabelRoot VALLABELROOT
+                        location of the val labels
+  --pascalCSV PASCALCSV
+                        location of pascal voc annotations
+  --initLR INITLR       initial Learning Rate
+  --trainBatchSize TRAINBATCHSIZE
+                        train batch size
+  --valBatchSize VALBATCHSIZE
+                        val batch size
+  --nEpoch NEPOCH       epochs
+  --experiment EXPERIMENT
+                        result dir
+  --checkpoint CHECKPOINT
+                        restore training from checkpoint
+  --lr_milestones LR_MILESTONES
+                        LR milestones
+  --gamma GAMMA         gamma value
+  --weight_decay WEIGHT_DECAY
+                        regularization weight decay
+  --loss_weightage LOSS_WEIGHTAGE
+                        weightage to deblur loss
+  --SPP
+  --SGD
+  --SSIM
+  --model {Unet,SPP,Resnet,Unet2}
+```
 
-05/31/2022
-- Switched from L2 to L1 Loss for the deblur task, supposedly more robust and should deal with overfitting issues. Also taking weighted sum of the losses instead of simple addition
-- Using weighted sums gave lower loss for validations and training, and slightly higher accuracy (blue is using 0.8 weight for deblur, red is 0.5):
-<img src="Weighted_sum_measurement.png">
+## Command to test the model
+- Run `python test.py`
+- Use the following arguments
+```
+usage: test.py [-h] [--LR LR] [--nEpoch NEPOCH] [--experiment EXPERIMENT]
+               [--BatchSize BATCHSIZE] [--pascalCSV PASCALCSV] [--SPP]
+               [--model {Unet,SPP,Resnet,Unet2}]
 
-05/17/2022
-- In CocoLoader, tried picking training images with just 1 annotation (commented out code in `cocoLoader.py`), resulted in only 3745 images.
+testing Params
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --LR LR               Learning Rate
+  --nEpoch NEPOCH       epochs
+  --experiment EXPERIMENT
+                        result dir
+  --BatchSize BATCHSIZE
+                        test batch size
+  --pascalCSV PASCALCSV
+                        location of pascal voc annotations
+  --SPP
+  --model {Unet,SPP,Resnet,Unet2}
+```
+
+## Command to test the model (Online TTT)
+- Run `python test-continuous.py`
+- Use the following arguments
+```
+usage: test-continuous.py [-h] [--LR LR] [--nEpoch NEPOCH]
+                          [--experiment EXPERIMENT] [--BatchSize BATCHSIZE]
+                          [--pascalCSV PASCALCSV] [--SPP]
+                          [--model {Unet,SPP,Resnet,Unet2}]
+
+testing Params
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --LR LR               Learning Rate
+  --nEpoch NEPOCH       epochs
+  --experiment EXPERIMENT
+                        result dir
+  --BatchSize BATCHSIZE
+                        test batch size
+  --pascalCSV PASCALCSV
+                        location of pascal voc annotations
+  --SPP
+  --model {Unet,SPP,Resnet,Unet2}
+```
