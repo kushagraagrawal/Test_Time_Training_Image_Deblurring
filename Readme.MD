@@ -44,7 +44,7 @@ optional arguments:
   --trainLabelRoot TRAINLABELROOT
                         location of the train labels
   --valImageRoot VALIMAGEROOT
-                        location of the training images
+                        location of the validation images
   --valLabelRoot VALLABELROOT
                         location of the val labels
   --pascalCSV PASCALCSV
