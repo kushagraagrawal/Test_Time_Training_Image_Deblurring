@@ -1,5 +1,5 @@
 # Test Time Training Image Deblurring
-The project uses Test-Time Training for Image Deblurring.
+The project uses [Test-Time Training](https://yueatsprograms.github.io/ttt/home.html) for Image Deblurring. Test-Time Training is a self-supervised approach that learns the test distribution using a pretext task in order to generalize well on the main task. For this project, we utilise image classification as a pretext task for image deblurring.
 
 ## Dataset download
 Simply run `bash datasetDownload.sh`
