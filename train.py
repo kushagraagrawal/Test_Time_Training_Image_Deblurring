@@ -10,7 +10,6 @@ from cocoLoader import CocoDataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from Model_architectures import Unet,SPP,Resnet,Unet2
-#from Models import *
 import numpy as np
 import os
 import random
@@ -237,7 +236,6 @@ while e < args.nEpoch:
             
             #  ===== visualise the predictions =====
             if(step == int((len(valCocoDataset)/valCocoDL.batch_size)-1)):
-                # os.system('mkdir %s/%s'%(args.experiment, 'epoch_' + str(e)))
                 save_decoded_image(gtImg.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/valGroundTruth_{trainIter}_{e}.png')
                 save_decoded_image(blurImg.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/valInputImage_{trainIter}_{e}.png')
                 save_decoded_image(output1.cpu().data, name=f'{args.experiment}/epoch_{str(e)}/valVisualization_{trainIter}_{e}.png')

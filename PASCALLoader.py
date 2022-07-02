@@ -57,22 +57,16 @@ class PascalVOCLoader(Dataset):
         return img
         
     def getBlurredOutput(self,img_path):
-        #img_path = os.path.join(self.root, img_path)
         p = torch.rand(1)
         k_size = 15
-        #return self.gaussian_blur(img_path,k_size)
         
         if p<=0.25:
-            #print("Vertical")
             return self.motion_blur_vertical(img_path,k_size)
         if p<=0.5:
-            #print("Horizontal")
             return self.motion_blur_horizontal(img_path,k_size)
         if p<=0.75:
-            #print("Average")
             return self.avg_blur(img_path,k_size)
         else:
-            #print("Gaussian")
             return self.gaussian_blur(img_path,k_size)
 
     def __len__(self) -> int:

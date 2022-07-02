@@ -15,7 +15,6 @@ category_dict = {'person': 1,
                  'airplane': 5,
                  'bus': 6,
                  'train': 7,
-                 # 'truck': 8,
                  'boat': 9,
                  'bird': 16,
                  'bottle': 44,
@@ -37,7 +36,6 @@ temp_dict = {1: 0,
              5: 4,
              6: 5,
              7: 6,
-             # 8: 7,
              9: 7,
              16: 8,
              44: 9,
@@ -122,18 +120,13 @@ class CocoDataset(Dataset):
         p = torch.rand(1)
         k_size = 15
         
-        #return self.gaussian_blur(img_path,k_size)
         if p<=0.25:
-            #print("Vertical")
             return self.motion_blur_vertical(img_path,k_size)
         if p<=0.5:
-            #print("Horizontal")
             return self.motion_blur_horizontal(img_path,k_size)
         if p<=0.75:
-            #print("Average")
             return self.avg_blur(img_path,k_size)
         else:
-            #print("Gaussian")
             return self.gaussian_blur(img_path,k_size)
      
 
@@ -146,28 +139,7 @@ class CocoDataset(Dataset):
 
     def _load_target(self, ids: int):
         target = self.coco.loadAnns(self.coco.getAnnIds(ids, iscrowd=None))
-#         for i in range(len(target)):
-#             print(target[i]['category_id'])
-#         print('********')
         return temp_dict[target[0]['category_id']]
-#         target_classes = defaultdict()
-#         # not sure on this
-#         for i in range(len(target)):
-#             print(target[i]['category_id'], target[i]['iscrowd'])
-#             if(target[i]['category_id'] in category_dict.values()):
-#                 if(target[i]['category_id'] in target_classes.keys()):
-#                     target_classes[target[i]['category_id']] += 1
-#                 else:
-#                     target_classes[target[i]['category_id']] = 1
-#         print('**********')
-#         max_val = -np.inf
-#         max_category = 0
-#         # print(target_classes)
-#         for key, val in target_classes.items():
-#             if val > max_val:
-#                 max_category = key
-#                 max_val = val
-#         return max_category
 
     def __getitem__(self, index: int):
         ids = self.ids[index]
@@ -176,11 +148,7 @@ class CocoDataset(Dataset):
         target = self._load_target(ids)
 
         if(self.transform is not None):
-            # torch.manual_seed(0)
             image = self.transform(image)
-#             blurredImage = cv2.cvtColor(blurredImage, cv2.COLOR_BGR2RGB)
-#             blurredImage = Image.fromarray(blurredImage)
-            # torch.manual_seed(0)
             blurredImage = self.transform(blurredImage)
 
         return {'image': image, 'inputImg': blurredImage, 'class': target}

@@ -135,7 +135,6 @@ for step, (data) in tqdm(enumerate(pascalLoader)):
         classifier_copy.train()
 
         gtImg, blurImg, classImg = data['image'].to(device), data['inputImg'].to(device), data['class'].to(device)
-        #print("classImg",classImg)
         
         it += 1
         
